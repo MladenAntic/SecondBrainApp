@@ -1,20 +1,35 @@
 /* eslint-disable prettier/prettier */
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 export const createDocument = mutation({
   args: {
     title: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+    
+    if (!userId) {
+      throw new ConvexError("You must be logged in to create a document");
+    }
+
     await ctx.db.insert("documents", {
       title: args.title,
+      tokenIdentifier: userId,
     });
   },
 });
 
 export const getDocuments = query({
   handler: async (ctx) => {
-    return await ctx.db.query("documents").collect();
+    const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+    
+    if (!userId) {
+      return []
+    }
+
+    return await ctx.db
+      .query("documents")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", userId)).collect();
   },
 });
