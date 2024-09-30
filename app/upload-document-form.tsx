@@ -18,10 +18,12 @@ import { LoadingButton } from "@/components/loading-button";
 
 const formSchema = z.object({
   title: z.string().min(1).max(250),
+  file: z.instanceof(File),
 });
 
 export const UploadDocumentForm = ({ onUpload }: { onUpload: () => void }) => {
   const createDocument = useMutation(api.documents.createDocument);
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -31,7 +33,18 @@ export const UploadDocumentForm = ({ onUpload }: { onUpload: () => void }) => {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    await createDocument({ title: values.title });
+    const url = await generateUploadUrl();
+    console.log(url);
+
+    const result = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": values.file.type },
+      body: values.file,
+    });
+
+    const { storageId } = await result.json();
+
+    await createDocument({ title: values.title, fileId: storageId as string });
     onUpload();
   }
 
@@ -46,6 +59,27 @@ export const UploadDocumentForm = ({ onUpload }: { onUpload: () => void }) => {
               <FormLabel>Title</FormLabel>
               <FormControl>
                 <Input placeholder="Expense Report" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="file"
+          render={({ field: { value, onChange, ...fieldProps } }) => (
+            <FormItem>
+              <FormLabel>File</FormLabel>
+              <FormControl>
+                <Input
+                  type="file"
+                  accept=".txt,.xml,.doc"
+                  {...fieldProps}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    onChange(file);
+                  }}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
