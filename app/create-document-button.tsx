@@ -1,8 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { api } from "@/convex/_generated/api";
-import { useMutation } from "convex/react";
 import {
   Dialog,
   DialogContent,
@@ -11,22 +9,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { UploadDocumentForm } from "./upload-document-form";
+import { useState } from "react";
 
 export const CreateDocumentButton = () => {
-  const createDocument = useMutation(api.documents.createDocument);
+  const [isOpen, setIsOpen] = useState(false);  
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button
-          onClick={() => {
-            createDocument({
-              title: "New Document",
-            });
-          }}
-        >
-          New Document
-        </Button>
+        <Button>New Document</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -34,6 +26,7 @@ export const CreateDocumentButton = () => {
           <DialogDescription>
             Upload a team document for you to search over in the future.
           </DialogDescription>
+          <UploadDocumentForm onUpload={() => setIsOpen(false)} />
         </DialogHeader>
       </DialogContent>
     </Dialog>
