@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { LoadingButton } from "@/components/loading-button";
+import { Id } from "@/convex/_generated/dataModel";
 
 const formSchema = z.object({
   title: z.string().min(1).max(250),
@@ -44,7 +45,10 @@ export const UploadDocumentForm = ({ onUpload }: { onUpload: () => void }) => {
 
     const { storageId } = await result.json();
 
-    await createDocument({ title: values.title, fileId: storageId as string });
+    await createDocument({
+      title: values.title,
+      fileId: storageId as Id<"_storage">,
+    });
     onUpload();
   }
 
