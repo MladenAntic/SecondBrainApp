@@ -1,10 +1,50 @@
-import { action, mutation, query } from "./_generated/server";
+import {
+  action,
+  internalQuery,
+  mutation,
+  MutationCtx,
+  query,
+  QueryCtx,
+} from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import OpenAI from "openai";
+import { Id } from "./_generated/dataModel";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+export async function hasAccessToDocument(
+  ctx: MutationCtx | QueryCtx,
+  documentId: Id<"documents">
+) {
+  const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+
+  if (!userId) {
+    return null;
+  }
+
+  const document = await ctx.db.get(documentId);
+
+  if (!document) {
+    return null;
+  }
+
+  if (document?.tokenIdentifier !== userId) {
+    throw new ConvexError("You do not have permission to view this document");
+  }
+
+  return { document, userId };
+}
+
+export const hasAccessToDocumentQuery = internalQuery({
+  args: {
+    documentId: v.id("documents"),
+  },
+  handler: async (ctx, args) => {
+    return await hasAccessToDocument(ctx, args.documentId);
+  },
 });
 
 export const createDocument = mutation({
@@ -47,25 +87,15 @@ export const getDocument = query({
     documentId: v.id("documents"),
   },
   handler: async (ctx, args) => {
-    const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+    const accessObj = await hasAccessToDocument(ctx, args.documentId);
 
-    if (!userId) {
+    if (!accessObj) {
       return null;
     }
 
-    const document = await ctx.db.get(args.documentId);
-
-    if (!document) {
-      throw new ConvexError("Document not found");
-    }
-
-    if (document?.tokenIdentifier !== userId) {
-      throw new ConvexError("You do not have permission to view this document");
-    }
-
     return {
-      ...document,
-      documentUrl: await ctx.storage.getUrl(document.fileId),
+      ...accessObj,
+      documentUrl: await ctx.storage.getUrl(accessObj.document.fileId),
     };
   },
 });
@@ -80,21 +110,18 @@ export const askQuestion = action({
     documentId: v.id("documents"),
   },
   handler: async (ctx, args) => {
-    const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+    const accessObj = await ctx.runQuery(
+      internal.documents.hasAccessToDocumentQuery,
+      {
+        documentId: args.documentId,
+      }
+    );
 
-    if (!userId) {
-      throw new ConvexError("You must be logged in to create a document");
+    if (!accessObj) {
+      throw new ConvexError("You do not have permission to view this document");
     }
 
-    const document = await ctx.runQuery(api.documents.getDocument, {
-      documentId: args.documentId,
-    });
-
-    if (!document) {
-      throw new ConvexError("Document not found");
-    }
-
-    const file = await ctx.storage.get(document.fileId);
+    const file = await ctx.storage.get(accessObj.document.fileId);
 
     if (!file) {
       throw new ConvexError("File not found");
@@ -117,6 +144,26 @@ export const askQuestion = action({
         ],
       });
 
-    return chatCompletion.choices[0].message.content;
+    // TODO: Store user prompt as a chat record
+    await ctx.runMutation(internal.chats.createChatRecord, {
+      documentId: args.documentId,
+      text: args.question,
+      isHuman: true,
+      tokenIdentifier: accessObj.userId,
+    });
+
+    // TODO: Store AI response as a chat record
+    const response =
+      chatCompletion.choices[0].message.content ??
+      "could not generate a response";
+
+    await ctx.runMutation(internal.chats.createChatRecord, {
+      documentId: args.documentId,
+      text: response,
+      isHuman: false,
+      tokenIdentifier: accessObj.userId,
+    });
+
+    return response;
   },
 });

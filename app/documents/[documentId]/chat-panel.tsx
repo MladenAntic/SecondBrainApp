@@ -1,35 +1,42 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { useAction } from "convex/react";
+import { cn } from "@/lib/utils";
+import { useQuery } from "convex/react";
+import { QuestionForm } from "./question-form";
 
 export default function ChatPanel({
   documentId,
 }: {
   documentId: Id<"documents">;
 }) {
-  const askQuestion = useAction(api.documents.askQuestion);
+  const chats = useQuery(api.chats.getChatsForDocument, { documentId });
 
   return (
-    <div className="flex w-[300px] flex-col justify-end bg-gray-900 p-4">
-      <div className="flex gap-1">
-        <form
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const form = event.target as HTMLFormElement;
-            const formData = new FormData(form);
-            const text = formData.get("text") as string;
+    <div className="flex flex-col gap-2 rounded-xl bg-gray-900 p-6">
+      <div className="h-[350px] space-y-2 overflow-y-auto">
+        <div className="rounded bg-slate-950 p-3">
+          AI: Ask any question about this document using AI:
+        </div>
+        {chats?.map((chat) => (
+          <div
+            key={chat._id}
+            className={cn(
+              {
+                "bg-slate-800 text-right": chat.isHuman,
+                "bg-slate-950": !chat.isHuman,
+              },
+              "rounded p-4 whitespace-pre-line"
+            )}
+          >
+            {chat.isHuman ? "YOU" : "AI"}: {chat.text}
+          </div>
+        ))}
+      </div>
 
-            // TODO: Call Convex
-            await askQuestion({ question: text, documentId }).then(console.log);
-          }}
-        >
-          <Input required name="text" />
-          <Button>Submit</Button>
-        </form>
+      <div className="flex gap-1">
+        <QuestionForm documentId={documentId} />
       </div>
     </div>
   );
