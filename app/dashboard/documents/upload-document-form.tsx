@@ -35,7 +35,6 @@ export const UploadDocumentForm = ({ onUpload }: { onUpload: () => void }) => {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const url = await generateUploadUrl();
-    console.log(url);
 
     const result = await fetch(url, {
       method: "POST",
